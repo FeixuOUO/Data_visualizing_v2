@@ -1,8 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-export const config = {
-  runtime: 'edge', // Use Edge Runtime for faster cold starts if compatible, or standard Node
-};
+// Standard Node.js runtime is used by default on Vercel when no config is present.
+// This ensures maximum compatibility with the Google GenAI SDK.
 
 export default async function handler(request) {
   // Handle CORS
