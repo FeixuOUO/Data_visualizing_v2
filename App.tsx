@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon } from 'lucide-react';
+import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { DataItem, ProcessingOptions } from './types';
-import { parseAndProcessData, generateExampleData } from './services/geminiService';
+import { parseAndProcessData, generateExampleData, getApiKey } from './services/geminiService';
 import { SalesTrendChart, CategoryPieChart, RegionBarChart, SalesDistributionChart } from './components/Charts';
 import { Toggle, GlassCard } from './components/Controls';
 
@@ -24,6 +24,16 @@ const App: React.FC = () => {
     sortData: true,
     filterRows: true
   });
+  
+  // Diagnostic State
+  const [keyStatus, setKeyStatus] = useState<'checking' | 'found' | 'missing'>('checking');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Check key on mount
+  useEffect(() => {
+    const key = getApiKey();
+    setKeyStatus(key ? 'found' : 'missing');
+  }, []);
 
   // Load example data on mount
   useEffect(() => {
@@ -33,14 +43,26 @@ const App: React.FC = () => {
 
   const handleLoadExample = async () => {
     setIsProcessing(true);
+    setErrorMsg(null);
     setRawData("Loading example dataset...");
     try {
       const data = await generateExampleData();
-      setProcessedData(data);
-      setRawData(JSON.stringify(data, null, 2));
-    } catch (error) {
+      if (data.length > 0) {
+        setProcessedData(data);
+        setRawData(JSON.stringify(data, null, 2));
+      } else {
+        setRawData("No data generated. Check console for details.");
+      }
+    } catch (error: any) {
       console.error("Error loading example", error);
-      setRawData("Error loading example data.");
+      if (error.message === "MISSING_KEY") {
+        setKeyStatus('missing');
+        setErrorMsg("API Key not found. Please set VITE_API_KEY in Vercel.");
+        setRawData("Error: API Key is missing. Check the banner above.");
+      } else {
+        setErrorMsg(`API Error: ${error.message || "Unknown error"}`);
+        setRawData(`Error loading data: ${error.message}`);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -49,12 +71,18 @@ const App: React.FC = () => {
   const handleProcessData = async () => {
     if (!rawData.trim()) return;
     setIsProcessing(true);
+    setErrorMsg(null);
     try {
       const result = await parseAndProcessData(rawData, options);
       setProcessedData(result);
       setActiveTab('visualizations');
-    } catch (error) {
-      alert("Failed to process data. Please ensure you have a valid API Key set.");
+    } catch (error: any) {
+       if (error.message === "MISSING_KEY") {
+        setKeyStatus('missing');
+        setErrorMsg("API Key missing. Cannot process data.");
+      } else {
+        setErrorMsg("Failed to process data. Check console for details.");
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -120,6 +148,20 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-blue-500/30">
       
+      {/* Diagnostic Banner */}
+      {keyStatus === 'missing' && (
+        <div className="bg-red-500/10 border-b border-red-500/50 px-4 py-2 flex items-center justify-center gap-2 text-red-200 text-sm font-medium">
+          <XCircle className="w-4 h-4 text-red-400" />
+          <span>System Alert: VITE_API_KEY not detected in environment variables. Please check Vercel settings and redeploy.</span>
+        </div>
+      )}
+      {keyStatus === 'found' && errorMsg && (
+        <div className="bg-amber-500/10 border-b border-amber-500/50 px-4 py-2 flex items-center justify-center gap-2 text-amber-200 text-sm font-medium">
+          <AlertTriangle className="w-4 h-4 text-amber-400" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
       {/* Navbar */}
       <nav className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
@@ -133,9 +175,17 @@ const App: React.FC = () => {
               </h1>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-2 text-sm text-slate-400 font-medium bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
-             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-             Data Visualizer & Analyzer
+          <div className="flex items-center gap-4">
+             {/* Status Pill */}
+             <div className={`hidden sm:flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full border ${
+               keyStatus === 'found' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
+             }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${keyStatus === 'found' ? 'bg-emerald-500' : 'bg-red-500'} animate-pulse`}></span>
+                {keyStatus === 'found' ? 'AI System Ready' : 'System Offline'}
+             </div>
+             <div className="hidden sm:flex items-center gap-2 text-sm text-slate-400 font-medium bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
+               Data Visualizer & Analyzer
+            </div>
           </div>
         </div>
       </nav>
@@ -234,7 +284,7 @@ const App: React.FC = () => {
 
               <button 
                 onClick={handleProcessData}
-                disabled={isProcessing}
+                disabled={isProcessing || keyStatus === 'missing'}
                 className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-900/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
               >
                 {isProcessing ? (

@@ -1,6 +1,42 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DataItem, ProcessingOptions } from "../types";
 
+// Helper to safely get the API Key in a browser/Vite environment
+export const getApiKey = (): string | undefined => {
+  let key: string | undefined = undefined;
+
+  // 1. Try standard Vite environment variable (Most reliable in Vite)
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    if (import.meta.env.VITE_API_KEY) key = import.meta.env.VITE_API_KEY;
+    // @ts-ignore
+    else if (import.meta.env.API_KEY) key = import.meta.env.API_KEY;
+  }
+  
+  // 2. Try process.env (Fallback for some Vercel configurations or DefinePlugin)
+  if (!key) {
+    try {
+      if (typeof process !== 'undefined' && process.env) {
+        if (process.env.VITE_API_KEY) key = process.env.VITE_API_KEY;
+        else if (process.env.API_KEY) key = process.env.API_KEY;
+        else if (process.env.NEXT_PUBLIC_API_KEY) key = process.env.NEXT_PUBLIC_API_KEY; // Just in case
+      }
+    } catch (e) {
+      // Ignore ReferenceError
+    }
+  }
+
+  // Debug log (Safe: only logs first 4 chars)
+  if (key) {
+    console.log(`[System] API Key detected: ${key.substring(0, 4)}...`);
+  } else {
+    console.warn("[System] No API Key detected in environment variables.");
+  }
+
+  return key;
+};
+
 // Define the schema for consistent AI output
 const dataItemSchema = {
   type: Type.ARRAY,
@@ -21,7 +57,13 @@ export const parseAndProcessData = async (
   rawInput: string,
   options: ProcessingOptions
 ): Promise<DataItem[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    throw new Error("MISSING_KEY");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey });
 
   const systemInstruction = `
     You are an advanced data processing engine. 
@@ -49,12 +91,18 @@ export const parseAndProcessData = async (
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini processing error:", error);
-    throw new Error("Failed to process data with AI.");
+    throw error;
   }
 };
 
 export const generateExampleData = async (): Promise<DataItem[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    throw new Error("MISSING_KEY");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey });
   
   try {
     const response = await ai.models.generateContent({
@@ -70,7 +118,7 @@ export const generateExampleData = async (): Promise<DataItem[]> => {
     const text = response.text || "[]";
     return JSON.parse(text);
   } catch (e) {
-    console.error(e);
-    return [];
+    console.error("Error generating example data:", e);
+    throw e;
   }
 }
