@@ -8,6 +8,15 @@ import { DataItem, ProcessingOptions } from "../types";
 export const getDiagnosticInfo = () => {
   const diagnostics: string[] = [];
   
+  // 0. Check LocalStorage (Manual Override)
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('gemini_api_key')) {
+      diagnostics.push("✅ localStorage 'gemini_api_key' is SET (Manual Override Active)");
+    } else {
+      diagnostics.push("ℹ️ localStorage 'gemini_api_key' is empty");
+    }
+  } catch (e) {}
+
   // 1. Check import.meta.env (Standard Vite)
   try {
     // @ts-ignore
@@ -49,9 +58,23 @@ export const getDiagnosticInfo = () => {
   return diagnostics;
 };
 
+// Helper to save API Key manually to localStorage
+export const saveApiKey = (key: string) => {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('gemini_api_key', key);
+  }
+};
+
 // Helper to safely get the API Key in a browser/Vite environment
 export const getApiKey = (): string | undefined => {
   let key: string | undefined = undefined;
+
+  // 0. Try Local Storage first (Manual Override)
+  // This allows the user to paste the key in the UI if Vercel env vars fail
+  if (typeof localStorage !== 'undefined') {
+    const localKey = localStorage.getItem('gemini_api_key');
+    if (localKey) return localKey;
+  }
 
   // 1. Try standard Vite environment variable (Most reliable in Vite)
   // @ts-ignore

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp, Save, Key } from 'lucide-react';
 import { DataItem, ProcessingOptions } from './types';
-import { parseAndProcessData, generateExampleData, getApiKey, getDiagnosticInfo } from './services/geminiService';
+import { parseAndProcessData, generateExampleData, getApiKey, getDiagnosticInfo, saveApiKey } from './services/geminiService';
 import { SalesTrendChart, CategoryPieChart, RegionBarChart, SalesDistributionChart } from './components/Charts';
 import { Toggle, GlassCard } from './components/Controls';
 
@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [manualKey, setManualKey] = useState('');
 
   // Check key on mount
   useEffect(() => {
@@ -60,7 +61,7 @@ const App: React.FC = () => {
       console.error("Error loading example", error);
       if (error.message === "MISSING_KEY") {
         setKeyStatus('missing');
-        setErrorMsg("API Key not found. Please set VITE_API_KEY in Vercel.");
+        setErrorMsg("API Key not found. Please set VITE_API_KEY in Vercel or enter it manually below.");
         setRawData("Error: API Key is missing. Check the banner above.");
       } else {
         setErrorMsg(`API Error: ${error.message || "Unknown error"}`);
@@ -89,6 +90,15 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleSaveKey = () => {
+    if (!manualKey.trim()) return;
+    saveApiKey(manualKey.trim());
+    setKeyStatus('found');
+    setErrorMsg(null);
+    // Reload page to ensure fresh start with new key
+    window.location.reload();
   };
 
   const handleExportData = (format: 'json' | 'csv') => {
@@ -151,30 +161,60 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-blue-500/30">
       
-      {/* Diagnostic Banner */}
+      {/* Diagnostic / Input Banner */}
       {keyStatus === 'missing' && (
-        <div className="bg-red-500/10 border-b border-red-500/50">
-          <div className="px-4 py-3 flex items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 text-red-200 text-sm font-medium">
-              <XCircle className="w-5 h-5 text-red-400 shrink-0" />
-              <span>System Alert: VITE_API_KEY not detected. Please check Vercel settings.</span>
+        <div className="bg-red-900/30 border-b border-red-500/50 backdrop-blur-sm">
+          <div className="px-4 py-4 flex flex-col gap-4">
+            
+            <div className="flex items-start justify-between gap-4">
+               <div className="flex items-center gap-3 text-red-200 text-sm font-medium">
+                <XCircle className="w-5 h-5 text-red-400 shrink-0" />
+                <span>
+                  System Alert: VITE_API_KEY not detected. 
+                  <span className="hidden sm:inline"> You can fix this by entering your Google Gemini API Key below.</span>
+                </span>
+              </div>
+              <button 
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-xs flex items-center gap-1 text-red-300 hover:text-white underline decoration-red-400/50 shrink-0"
+              >
+                {showDebug ? 'Hide Debug' : 'Show Debug'}
+                {showDebug ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
+              </button>
             </div>
-            <button 
-              onClick={() => setShowDebug(!showDebug)}
-              className="text-xs flex items-center gap-1 text-red-300 hover:text-white underline decoration-red-400/50"
-            >
-              {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
-              {showDebug ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
-            </button>
+
+            {/* Manual Key Input */}
+            <div className="flex flex-col sm:flex-row gap-2 max-w-2xl">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Key className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  type="password"
+                  value={manualKey}
+                  onChange={(e) => setManualKey(e.target.value)}
+                  placeholder="Paste your API Key here (starts with AIza...)"
+                  className="w-full pl-10 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <button 
+                onClick={handleSaveKey}
+                disabled={!manualKey}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save className="w-4 h-4" />
+                Save & Restart
+              </button>
+            </div>
+
+            {showDebug && (
+              <div className="bg-black/40 px-4 py-3 text-xs font-mono text-slate-400 border-t border-red-500/20 max-h-40 overflow-auto rounded-lg mt-2">
+                {debugInfo.map((line, i) => (
+                  <div key={i} className="mb-1">{line}</div>
+                ))}
+              </div>
+            )}
           </div>
-          {showDebug && (
-            <div className="bg-black/30 px-4 py-3 text-xs font-mono text-slate-400 border-t border-red-500/20 max-h-40 overflow-auto">
-              {debugInfo.map((line, i) => (
-                <div key={i} className="mb-1">{line}</div>
-              ))}
-              <div className="mt-2 text-slate-500">Tip: Environment variables must start with VITE_ to be exposed to the browser.</div>
-            </div>
-          )}
         </div>
       )}
       
