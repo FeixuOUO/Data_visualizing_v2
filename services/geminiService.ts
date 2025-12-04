@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { DataItem, ProcessingOptions } from "../types";
 
 // Encryption helpers to obscure the key in localStorage
@@ -79,9 +78,26 @@ const callGemini = async (prompt: string, systemInstruction: string, schema?: an
     body: JSON.stringify({ prompt, systemInstruction, schema })
   });
 
+  const contentType = response.headers.get("content-type");
+  const isJson = contentType && contentType.includes("application/json");
+
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "Backend Processing Failed");
+    let errorDetail = "Backend Processing Failed";
+    if (isJson) {
+        try {
+            const err = await response.json();
+            errorDetail = err.error || errorDetail;
+        } catch (e) {}
+    } else {
+        // Handle HTML error pages (e.g., 404, 500 from Vercel infrastructure)
+        const text = await response.text();
+        errorDetail = `Server Error (${response.status}): ${text.substring(0, 50)}...`;
+    }
+    throw new Error(errorDetail);
+  }
+
+  if (!isJson) {
+      throw new Error("Invalid response from server: Expected JSON but got " + contentType);
   }
 
   const data = await response.json();
@@ -109,8 +125,6 @@ export const parseAndProcessData = async (
     ${options.filterRows ? "- Remove garbage/header/footer rows." : ""}
   `;
 
-  // We do NOT pass a strict schema here to allow dynamic column names
-  // But we ask for ARRAY output in system prompt
   return callGemini(
     `Parse this data into a valid JSON array of objects:\n${rawInput.substring(0, 30000)}`,
     systemInstruction

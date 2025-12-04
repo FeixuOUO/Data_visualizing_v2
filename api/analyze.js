@@ -1,76 +1,60 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Standard Node.js runtime is used by default on Vercel when no config is present.
-// This ensures maximum compatibility with the Google GenAI SDK.
+// Standard Node.js Serverless Function for Vercel
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-export default async function handler(request) {
-  // Handle CORS
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    // Attempt to get API Key from environment variables
     const apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'Server configuration error: API Key missing' }), {
-        status: 500,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
+      console.error("Server API Key missing");
+      return res.status(500).json({ error: 'Server configuration error: API Key missing in Vercel env' });
     }
 
-    const body = await request.json();
-    const { prompt, systemInstruction, schema } = body;
+    // Vercel automatically parses JSON body for standard Node.js functions
+    const { prompt, systemInstruction, schema } = req.body || {};
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt in request body' });
+    }
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // We use a generic model config here
+    // Call Gemini API
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
-        // Pass schema if provided, else undefined
         responseSchema: schema || undefined,
       }
     });
 
     const text = response.text || "[]";
 
-    return new Response(JSON.stringify({ text }), {
-      status: 200,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' 
-      }
-    });
+    // Return successful response
+    return res.status(200).json({ text });
 
   } catch (error) {
     console.error("Serverless Function Error:", error);
-    return new Response(JSON.stringify({ error: error.message || 'Internal Server Error' }), {
-      status: 500,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' 
-      }
+    return res.status(500).json({ 
+      error: error.message || 'Internal Server Error',
+      details: error.toString()
     });
   }
 }
