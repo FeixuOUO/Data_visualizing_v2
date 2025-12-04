@@ -118,8 +118,22 @@ export const parseAndProcessData = async (
 };
 
 export const generateExampleData = async (): Promise<DataItem[]> => {
-  const systemInstruction = "Generate a realistic business dataset for visualization. Return a JSON array.";
-  const prompt = "Generate a list of 15 records with these columns: 'Date', 'Region', 'Category', 'Revenue', 'Units'. Covers last 12 months.";
-  
-  return callGemini(prompt, systemInstruction);
+  // Static data to ensure speed and demonstrate dynamic column mapping (non-standard names)
+  return [
+    { "Transaction_Date": "2024-01-15", "Sales_Channel": "Online", "Product_Line": "Laptops", "Gross_Revenue": 15000, "Units_Sold": 12 },
+    { "Transaction_Date": "2024-02-03", "Sales_Channel": "Retail", "Product_Line": "Smartphones", "Gross_Revenue": 28000, "Units_Sold": 35 },
+    { "Transaction_Date": "2024-02-20", "Sales_Channel": "Online", "Product_Line": "Tablets", "Gross_Revenue": 8500, "Units_Sold": 20 },
+    { "Transaction_Date": "2024-03-10", "Sales_Channel": "Wholesale", "Product_Line": "Laptops", "Gross_Revenue": 45000, "Units_Sold": 40 },
+    { "Transaction_Date": "2024-03-25", "Sales_Channel": "Retail", "Product_Line": "Accessories", "Gross_Revenue": 3200, "Units_Sold": 150 },
+    { "Transaction_Date": "2024-04-05", "Sales_Channel": "Online", "Product_Line": "Smartphones", "Gross_Revenue": 31000, "Units_Sold": 38 },
+    { "Transaction_Date": "2024-04-18", "Sales_Channel": "Online", "Product_Line": "Laptops", "Gross_Revenue": 18000, "Units_Sold": 15 },
+    { "Transaction_Date": "2024-05-02", "Sales_Channel": "Retail", "Product_Line": "Tablets", "Gross_Revenue": 9200, "Units_Sold": 22 },
+    { "Transaction_Date": "2024-05-20", "Sales_Channel": "Wholesale", "Product_Line": "Accessories", "Gross_Revenue": 5600, "Units_Sold": 200 },
+    { "Transaction_Date": "2024-06-12", "Sales_Channel": "Online", "Product_Line": "Smartphones", "Gross_Revenue": 29500, "Units_Sold": 36 },
+    { "Transaction_Date": "2024-06-28", "Sales_Channel": "Retail", "Product_Line": "Laptops", "Gross_Revenue": 21000, "Units_Sold": 18 },
+    { "Transaction_Date": "2024-07-08", "Sales_Channel": "Online", "Product_Line": "Accessories", "Gross_Revenue": 4100, "Units_Sold": 180 },
+    { "Transaction_Date": "2024-07-25", "Sales_Channel": "Wholesale", "Product_Line": "Tablets", "Gross_Revenue": 11000, "Units_Sold": 25 },
+    { "Transaction_Date": "2024-08-05", "Sales_Channel": "Retail", "Product_Line": "Smartphones", "Gross_Revenue": 33000, "Units_Sold": 42 },
+    { "Transaction_Date": "2024-08-22", "Sales_Channel": "Online", "Product_Line": "Laptops", "Gross_Revenue": 16500, "Units_Sold": 14 }
+  ];
 }

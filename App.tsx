@@ -86,7 +86,7 @@ const App: React.FC = () => {
   const handleLoadExample = async () => {
     setIsProcessing(true);
     setErrorMsg(null);
-    setRawData("Loading example dataset via AI...");
+    setRawData("Loading example dataset...");
     try {
       const data = await generateExampleData();
       if (data.length > 0) {
