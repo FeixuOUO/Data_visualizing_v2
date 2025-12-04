@@ -1,16 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DataItem, ProcessingOptions } from "../types";
 
-// Helper to get the API key safely
-const getApiKey = (): string => {
-  const key = process.env.API_KEY;
-  if (!key) {
-    console.error("API Key not found in environment variables");
-    return "";
-  }
-  return key;
-};
-
 // Define the schema for consistent AI output
 const dataItemSchema = {
   type: Type.ARRAY,
@@ -31,10 +21,7 @@ export const parseAndProcessData = async (
   rawInput: string,
   options: ProcessingOptions
 ): Promise<DataItem[]> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const systemInstruction = `
     You are an advanced data processing engine. 
@@ -67,10 +54,7 @@ export const parseAndProcessData = async (
 };
 
 export const generateExampleData = async (): Promise<DataItem[]> => {
-  const apiKey = getApiKey();
-  if (!apiKey) return [];
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({

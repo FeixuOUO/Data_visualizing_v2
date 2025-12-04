@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import { DataItem, ProcessingOptions } from './types';
 import { parseAndProcessData, generateExampleData } from './services/geminiService';
 import { SalesTrendChart, CategoryPieChart, RegionBarChart, SalesDistributionChart } from './components/Charts';
 import { Toggle, GlassCard } from './components/Controls';
+
+// Declare html2canvas on window since we are loading it via CDN in index.html for stability
+declare global {
+  interface Window {
+    html2canvas: any;
+  }
+}
 
 const App: React.FC = () => {
   // State
@@ -84,12 +90,17 @@ const App: React.FC = () => {
 
   const handleExportCharts = async () => {
     const element = document.getElementById('visualizations-container');
-    if (element) {
+    
+    // Check if html2canvas is available (from CDN or npm)
+    const h2c = window.html2canvas;
+
+    if (element && h2c) {
       try {
-        const canvas = await html2canvas(element, { 
+        const canvas = await h2c(element, { 
           backgroundColor: '#0f172a',
           scale: 2, // Higher quality
-          logging: false
+          logging: false,
+          useCORS: true
         });
         const link = document.createElement('a');
         link.download = 'datascope_dashboard.png';
@@ -99,6 +110,8 @@ const App: React.FC = () => {
         console.error("Export failed", err);
         alert("Failed to export charts. Please try again.");
       }
+    } else if (!h2c) {
+      alert("Export functionality is initializing, please try again in a moment.");
     } else {
        alert("Switch to Visualizations tab to export charts.");
     }
