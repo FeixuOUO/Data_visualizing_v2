@@ -1,188 +1,125 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { DataItem, ProcessingOptions } from "../types";
 
-/**
- * Diagnostic function to check what the environment actually looks like.
- * This helps debug Vercel/Vite environment variable injection issues.
- */
+// Encryption helpers to obscure the key in localStorage
+const SALT = "ds_v1_salt_";
+export const encryptKey = (key: string) => {
+  try {
+    return btoa(SALT + key);
+  } catch (e) { return key; }
+};
+
+export const decryptKey = (encrypted: string) => {
+  try {
+    const decoded = atob(encrypted);
+    if (decoded.startsWith(SALT)) return decoded.slice(SALT.length);
+    return encrypted; // Fallback if not salted
+  } catch (e) { return encrypted; }
+};
+
 export const getDiagnosticInfo = () => {
   const diagnostics: string[] = [];
-  
-  // 0. Check LocalStorage (Manual Override)
   try {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('gemini_api_key')) {
-      diagnostics.push("✅ localStorage 'gemini_api_key' is SET (Manual Override Active)");
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('gemini_api_key_enc')) {
+      diagnostics.push("✅ Local Custom Key: PRESENT (Encrypted)");
     } else {
-      diagnostics.push("ℹ️ localStorage 'gemini_api_key' is empty");
+      diagnostics.push("ℹ️ Local Custom Key: None");
     }
   } catch (e) {}
 
-  // 1. Check import.meta.env (Standard Vite)
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-      diagnostics.push("Check 1: import.meta.env is available");
-      
-      // List keys starting with VITE_ or containing KEY to verify injection
-      // @ts-ignore
-      const allKeys = Object.keys(import.meta.env);
-      const visibleKeys = allKeys.filter(k => k.startsWith('VITE_') || k.includes('KEY'));
-      diagnostics.push(`Visible keys: [${visibleKeys.join(', ')}]`);
-      
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY) diagnostics.push("✅ import.meta.env.VITE_API_KEY is SET");
-      else diagnostics.push("❌ import.meta.env.VITE_API_KEY is MISSING");
-      
-      // @ts-ignore
-      if (import.meta.env.API_KEY) diagnostics.push("⚠️ import.meta.env.API_KEY is SET (Non-standard)");
-    } else {
-      diagnostics.push("❌ import.meta.env is undefined");
-    }
-  } catch (e: any) {
-    diagnostics.push(`Error checking import.meta: ${e.message}`);
+  // Check for Backend Proxy availability (inference)
+  if (typeof window !== 'undefined') {
+    diagnostics.push("ℹ️ Backend Proxy Mode: Ready (will be used if Local Key is missing)");
   }
-
-  // 2. Check process.env (Fallback)
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      diagnostics.push("Check 2: process.env is available");
-      if (process.env.VITE_API_KEY) diagnostics.push("✅ process.env.VITE_API_KEY is SET");
-      if (process.env.API_KEY) diagnostics.push("⚠️ process.env.API_KEY is SET");
-    } else {
-      diagnostics.push("ℹ️ process.env is undefined (Normal for Vite)");
-    }
-  } catch (e: any) {
-     diagnostics.push(`Error checking process.env: ${e.message}`);
-  }
-
+  
   return diagnostics;
 };
 
-// Helper to save API Key manually to localStorage
 export const saveApiKey = (key: string) => {
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('gemini_api_key', key);
+    localStorage.setItem('gemini_api_key_enc', encryptKey(key));
   }
 };
 
-// Helper to safely get the API Key in a browser/Vite environment
-export const getApiKey = (): string | undefined => {
-  let key: string | undefined = undefined;
-
-  // 0. Try Local Storage first (Manual Override)
-  // This allows the user to paste the key in the UI if Vercel env vars fail
+export const getLocalApiKey = (): string | undefined => {
   if (typeof localStorage !== 'undefined') {
-    const localKey = localStorage.getItem('gemini_api_key');
-    if (localKey) return localKey;
+    const enc = localStorage.getItem('gemini_api_key_enc');
+    if (enc) return decryptKey(enc);
   }
-
-  // 1. Try standard Vite environment variable (Most reliable in Vite)
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    // @ts-ignore
-    if (import.meta.env.VITE_API_KEY) key = import.meta.env.VITE_API_KEY;
-    // @ts-ignore
-    else if (import.meta.env.API_KEY) key = import.meta.env.API_KEY;
-  }
-  
-  // 2. Try process.env (Fallback for some Vercel configurations)
-  if (!key) {
-    try {
-      if (typeof process !== 'undefined' && process.env) {
-        if (process.env.VITE_API_KEY) key = process.env.VITE_API_KEY;
-        else if (process.env.API_KEY) key = process.env.API_KEY;
-        else if (process.env.NEXT_PUBLIC_API_KEY) key = process.env.NEXT_PUBLIC_API_KEY; 
-      }
-    } catch (e) {
-      // Ignore ReferenceError
-    }
-  }
-
-  return key;
+  return undefined;
 };
 
-// Define the schema for consistent AI output
-const dataItemSchema = {
-  type: Type.ARRAY,
-  items: {
-    type: Type.OBJECT,
-    properties: {
-      date: { type: Type.STRING, description: "Date in YYYY-MM-DD format" },
-      sales: { type: Type.NUMBER, description: "Total sales amount" },
-      category: { type: Type.STRING, description: "Product category (e.g., Electronics, Apparel)" },
-      region: { type: Type.STRING, description: "Sales region (e.g., North, West)" },
-      units_sold: { type: Type.NUMBER, description: "Number of units sold" },
-    },
-    required: ["date", "sales", "category", "region", "units_sold"],
+// Generic Proxy Caller
+const callGemini = async (prompt: string, systemInstruction: string, schema?: any): Promise<any> => {
+  const localKey = getLocalApiKey();
+
+  // MODE A: Client-side SDK (if user provided a key)
+  if (localKey) {
+    console.log("Using Local API Key");
+    const ai = new GoogleGenAI({ apiKey: localKey });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      }
+    });
+    const text = response.text || "[]";
+    return JSON.parse(text);
   }
+
+  // MODE B: Backend Proxy (Serverless Function)
+  console.log("Using Backend Proxy");
+  const response = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, systemInstruction, schema })
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "Backend Processing Failed");
+  }
+
+  const data = await response.json();
+  return JSON.parse(data.text);
 };
 
 export const parseAndProcessData = async (
   rawInput: string,
   options: ProcessingOptions
 ): Promise<DataItem[]> => {
-  const apiKey = getApiKey();
   
-  if (!apiKey) {
-    throw new Error("MISSING_KEY");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-
   const systemInstruction = `
-    You are an advanced data processing engine. 
-    Your goal is to parse raw input text (CSV, JSON, or unstructured text) into a structured dataset.
+    You are an advanced data parsing engine.
+    Analyze the user's raw text. It could be CSV, JSON, or just unstructured text.
+    Extract the data into a JSON array of objects.
     
-    Processing Rules applied by user:
-    ${options.cleanMissingValues ? "- Clean Missing Values: Infer missing numbers with averages, and strings with 'Unknown'." : "- Keep missing values as is (null/empty)."}
-    ${options.normalizeData ? "- Normalize Data: Ensure 'sales' values are scaled realistically (0-5000 range) if they seem outlier-ish." : ""}
-    ${options.sortData ? "- Sort Data: Sort the result chronologically by Date." : ""}
-    ${options.filterRows ? "- Filter Rows: Exclude header rows, footer rows, or garbage/corrupted data lines." : ""}
+    IMPORTANT: Do NOT force specific field names like 'sales' or 'date' unless they exist in the data.
+    Preserve the original column names or inferred meaningful names.
+    Ensure all objects in the array have the same keys.
+    
+    Processing Rules:
+    ${options.cleanMissingValues ? "- Infer missing values logically." : "- Leave missing values null."}
+    ${options.normalizeData ? "- Normalize numerical outliers." : ""}
+    ${options.sortData ? "- Sort chronologically if a date column exists." : ""}
+    ${options.filterRows ? "- Remove garbage/header/footer rows." : ""}
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Parse this raw data:\n${rawInput}`,
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: dataItemSchema,
-      }
-    });
-
-    const text = response.text || "[]";
-    return JSON.parse(text);
-  } catch (error) {
-    console.error("Gemini processing error:", error);
-    throw error;
-  }
+  // We do NOT pass a strict schema here to allow dynamic column names
+  // But we ask for ARRAY output in system prompt
+  return callGemini(
+    `Parse this data into a valid JSON array of objects:\n${rawInput.substring(0, 30000)}`,
+    systemInstruction
+  );
 };
 
 export const generateExampleData = async (): Promise<DataItem[]> => {
-  const apiKey = getApiKey();
+  const systemInstruction = "Generate a realistic business dataset for visualization. Return a JSON array.";
+  const prompt = "Generate a list of 15 records with these columns: 'Date', 'Region', 'Category', 'Revenue', 'Units'. Covers last 12 months.";
   
-  if (!apiKey) {
-    throw new Error("MISSING_KEY");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-  
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: "Generate a realistic sales dataset with 15 records spanning the last 12 months.",
-      config: {
-        systemInstruction: "Generate realistic business data for visualization.",
-        responseMimeType: "application/json",
-        responseSchema: dataItemSchema,
-      }
-    });
-    
-    const text = response.text || "[]";
-    return JSON.parse(text);
-  } catch (e) {
-    console.error("Error generating example data:", e);
-    throw e;
-  }
+  return callGemini(prompt, systemInstruction);
 }

@@ -1,10 +1,6 @@
+
 export interface DataItem {
-  date: string;
-  sales: number;
-  category: string;
-  region: string;
-  units_sold: number;
-  [key: string]: string | number;
+  [key: string]: string | number | null | undefined;
 }
 
 export interface ProcessingOptions {
@@ -16,8 +12,8 @@ export interface ProcessingOptions {
 
 export type ChartType = 'line' | 'bar' | 'pie' | 'area';
 
-export interface AnalyticSummary {
-  totalSales: number;
-  topCategory: string;
-  topRegion: string;
+export interface ColumnMapping {
+  xKey: string;      // For Date/Time axis
+  yKey: string;      // For Values/Metrics
+  categoryKey: string; // For Grouping/Slices
 }
