@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp, Save, Key, ShieldCheck } from 'lucide-react';
 import { DataItem, ProcessingOptions, ColumnMapping } from './types';
@@ -38,7 +37,6 @@ const App: React.FC = () => {
     if (local) {
       setAuthMode('local');
     }
-    // handleLoadExample(); // Removed to prevent auto-loading
   }, []);
 
   const detectColumns = (data: DataItem[]) => {
@@ -84,22 +82,20 @@ const App: React.FC = () => {
   };
 
   const handleLoadExample = async () => {
-    setIsProcessing(true);
     setErrorMsg(null);
-    setRawData("Loading example dataset...");
     try {
       const data = await generateExampleData();
       if (data.length > 0) {
-        setProcessedData(data);
-        detectColumns(data);
+        // Just populate the text area
         setRawData(JSON.stringify(data, null, 2));
+        // Clear existing charts so user knows to click Run
+        setProcessedData([]); 
+        setColMapping({ xKey: '', yKey: '', categoryKey: '' });
       }
     } catch (error: any) {
       console.error("Load error", error);
       setErrorMsg(`Failed to load: ${error.message}`);
       setRawData(`Error: ${error.message}`);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
