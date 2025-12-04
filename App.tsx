@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu } from 'lucide-react';
+import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { DataItem, ProcessingOptions } from './types';
 import { parseAndProcessData, generateExampleData } from './services/geminiService';
 import { SalesTrendChart, CategoryPieChart, RegionBarChart, SalesDistributionChart } from './components/Charts';
@@ -15,7 +16,7 @@ const App: React.FC = () => {
     cleanMissingValues: true,
     normalizeData: false,
     sortData: true,
-    filterRows: false
+    filterRows: true
   });
 
   // Load example data on mount
@@ -33,6 +34,7 @@ const App: React.FC = () => {
       setRawData(JSON.stringify(data, null, 2));
     } catch (error) {
       console.error("Error loading example", error);
+      setRawData("Error loading example data.");
     } finally {
       setIsProcessing(false);
     }
@@ -52,17 +54,53 @@ const App: React.FC = () => {
     }
   };
 
-  const handleExport = (type: 'data' | 'charts') => {
-    if (type === 'data') {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(processedData));
-      const downloadAnchorNode = document.createElement('a');
-      downloadAnchorNode.setAttribute("href", dataStr);
-      downloadAnchorNode.setAttribute("download", "datascope_export.json");
-      document.body.appendChild(downloadAnchorNode);
-      downloadAnchorNode.click();
-      downloadAnchorNode.remove();
+  const handleExportData = (format: 'json' | 'csv') => {
+    if (processedData.length === 0) return;
+
+    let content = '';
+    let mimeType = '';
+    let extension = '';
+
+    if (format === 'json') {
+      content = JSON.stringify(processedData, null, 2);
+      mimeType = 'application/json';
+      extension = 'json';
     } else {
-      alert("Chart export requires html2canvas or similar (not included in this simplified demo).");
+      // Convert to CSV
+      const headers = Object.keys(processedData[0]).join(',');
+      const rows = processedData.map(row => Object.values(row).join(',')).join('\n');
+      content = `${headers}\n${rows}`;
+      mimeType = 'text/csv';
+      extension = 'csv';
+    }
+
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `datascope_export.${extension}`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const handleExportCharts = async () => {
+    const element = document.getElementById('visualizations-container');
+    if (element) {
+      try {
+        const canvas = await html2canvas(element, { 
+          backgroundColor: '#0f172a',
+          scale: 2, // Higher quality
+          logging: false
+        });
+        const link = document.createElement('a');
+        link.download = 'datascope_dashboard.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        console.error("Export failed", err);
+        alert("Failed to export charts. Please try again.");
+      }
+    } else {
+       alert("Switch to Visualizations tab to export charts.");
     }
   };
 
@@ -73,8 +111,8 @@ const App: React.FC = () => {
       <nav className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600/20 p-2 rounded-lg">
-              <Database className="w-6 h-6 text-blue-400" />
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
+              <Database className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
@@ -82,8 +120,9 @@ const App: React.FC = () => {
               </h1>
             </div>
           </div>
-          <div className="text-sm text-slate-400 font-medium hidden sm:block">
-            Data Visualizer & Analyzer
+          <div className="hidden sm:flex items-center gap-2 text-sm text-slate-400 font-medium bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
+             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+             Data Visualizer & Analyzer
           </div>
         </div>
       </nav>
@@ -92,11 +131,11 @@ const App: React.FC = () => {
         
         {/* Left Panel: Controls */}
         <div className="lg:col-span-3 space-y-6">
-          <GlassCard className="h-full flex flex-col">
+          <GlassCard className="h-full flex flex-col border-t border-t-slate-600/20">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-400" />
-                Data Input
+                Data Input & Controls
               </h2>
               <Menu className="w-5 h-5 text-slate-500 cursor-pointer hover:text-white" />
             </div>
@@ -106,25 +145,25 @@ const App: React.FC = () => {
                 <textarea 
                   value={rawData}
                   onChange={(e) => setRawData(e.target.value)}
-                  placeholder="Paste CSV, JSON, or messy text here..."
-                  className="w-full h-64 lg:h-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-xs font-mono text-slate-300 focus:outline-none focus:border-blue-500 resize-none scrollbar-thin scrollbar-thumb-slate-700"
+                  placeholder="Paste CSV, JSON, or unstructured text data here..."
+                  className="w-full h-64 lg:h-full bg-slate-950/50 border border-slate-700/80 rounded-xl p-4 text-xs font-mono text-slate-300 focus:outline-none focus:border-blue-500 resize-none scrollbar-thin scrollbar-thumb-slate-700 transition-all focus:ring-1 focus:ring-blue-500/50"
                 />
                 <button 
                   onClick={() => setRawData('')}
-                  className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 rounded"
                   title="Clear"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="w-3 h-3" />
                 </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  className="flex items-center justify-center gap-2 py-2 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors text-slate-200"
+                  className="flex items-center justify-center gap-2 py-2 px-4 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-colors text-slate-200 border border-slate-700"
                   onClick={() => document.getElementById('file-upload')?.click()}
                 >
                   <Upload className="w-4 h-4" />
-                  Upload
+                  Upload File
                 </button>
                 <input 
                   type="file" 
@@ -143,45 +182,47 @@ const App: React.FC = () => {
                 
                 <button 
                   onClick={handleLoadExample}
-                  className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg text-sm transition-colors border border-blue-600/20"
+                  className="flex items-center justify-center gap-2 py-2 px-4 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg text-sm transition-colors border border-blue-500/20"
                 >
                   <Wand2 className="w-4 h-4" />
-                  Example
+                  Load Example
                 </button>
               </div>
 
-              <div className="bg-slate-900/40 rounded-xl p-4 border border-slate-700/50 mt-4">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <div className="bg-slate-900/40 rounded-xl p-4 border border-slate-700/50 mt-4 shadow-inner">
+                <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
                   Processing Functions
-                  <div className="h-px bg-slate-700 flex-1 ml-2"></div>
+                  <div className="h-px bg-slate-700 flex-1 ml-2 opacity-50"></div>
                 </h3>
                 
-                <Toggle 
-                  label="Clean Missing Values" 
-                  checked={options.cleanMissingValues} 
-                  onChange={(v) => setOptions({...options, cleanMissingValues: v})} 
-                />
-                <Toggle 
-                  label="Normalize Data" 
-                  checked={options.normalizeData} 
-                  onChange={(v) => setOptions({...options, normalizeData: v})} 
-                />
-                <Toggle 
-                  label="Sort by Date" 
-                  checked={options.sortData} 
-                  onChange={(v) => setOptions({...options, sortData: v})} 
-                />
-                <Toggle 
-                  label="Smart Filter Rows" 
-                  checked={options.filterRows} 
-                  onChange={(v) => setOptions({...options, filterRows: v})} 
-                />
+                <div className="space-y-1">
+                  <Toggle 
+                    label="Clean Missing Values" 
+                    checked={options.cleanMissingValues} 
+                    onChange={(v) => setOptions({...options, cleanMissingValues: v})} 
+                  />
+                  <Toggle 
+                    label="Normalize Data" 
+                    checked={options.normalizeData} 
+                    onChange={(v) => setOptions({...options, normalizeData: v})} 
+                  />
+                  <Toggle 
+                    label="Sort By Column" 
+                    checked={options.sortData} 
+                    onChange={(v) => setOptions({...options, sortData: v})} 
+                  />
+                  <Toggle 
+                    label="Filter Rows" 
+                    checked={options.filterRows} 
+                    onChange={(v) => setOptions({...options, filterRows: v})} 
+                  />
+                </div>
               </div>
 
               <button 
                 onClick={handleProcessData}
                 disabled={isProcessing}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-900/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-900/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
               >
                 {isProcessing ? (
                   <>
@@ -189,7 +230,7 @@ const App: React.FC = () => {
                     Processing...
                   </>
                 ) : (
-                  <>Process Data</>
+                  <>Run Analysis</>
                 )}
               </button>
             </div>
@@ -202,8 +243,8 @@ const App: React.FC = () => {
             <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700/50 backdrop-blur-sm w-fit">
               <button
                 onClick={() => setActiveTab('table')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'table' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'table' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Table className="w-4 h-4" />
@@ -211,8 +252,8 @@ const App: React.FC = () => {
               </button>
               <button
                 onClick={() => setActiveTab('visualizations')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'visualizations' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'visualizations' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <BarChart2 className="w-4 h-4" />
@@ -221,64 +262,79 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex gap-2">
-              <button onClick={() => handleExport('data')} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-sm transition-colors">
-                <Download className="w-4 h-4" /> Export Data
-              </button>
-              <button onClick={() => handleExport('charts')} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-sm transition-colors">
-                 Export Charts
+              <div className="relative group">
+                <button className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-sm transition-colors shadow-sm">
+                  <Download className="w-4 h-4" /> Export Data
+                </button>
+                <div className="absolute right-0 top-full mt-2 w-32 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-20">
+                  <button onClick={() => handleExportData('csv')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">CSV</button>
+                  <button onClick={() => handleExportData('json')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">JSON</button>
+                </div>
+              </div>
+              
+              <button 
+                onClick={handleExportCharts} 
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-sm transition-colors shadow-sm"
+              >
+                 <ImageIcon className="w-4 h-4" /> Export Charts
               </button>
             </div>
           </div>
 
           {activeTab === 'visualizations' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 h-[calc(100%-80px)]">
+            <div id="visualizations-container" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 h-auto min-h-[600px] p-1">
               {/* Sales Trend - Large Top Left */}
-              <GlassCard className="md:col-span-2 min-h-[300px] flex flex-col">
-                <h3 className="text-white font-semibold mb-4 text-lg">Sales Trend</h3>
+              <GlassCard className="md:col-span-2 min-h-[320px] flex flex-col">
+                <h3 className="text-white font-semibold mb-6 text-lg tracking-tight">Sales Trend</h3>
                 <div className="flex-1 w-full min-h-0">
                   <SalesTrendChart data={processedData} />
                 </div>
               </GlassCard>
 
               {/* Product Breakdown - Top Right */}
-              <GlassCard className="min-h-[300px] flex flex-col">
-                 <h3 className="text-white font-semibold mb-4 text-lg">Product Category Breakdown</h3>
+              <GlassCard className="min-h-[320px] flex flex-col">
+                 <h3 className="text-white font-semibold mb-6 text-lg tracking-tight">Product Category Breakdown</h3>
                  <div className="flex-1 w-full min-h-0">
                   <CategoryPieChart data={processedData} />
                  </div>
               </GlassCard>
 
               {/* Regional Sales - Bottom Left */}
-              <GlassCard className="md:col-span-2 lg:col-span-1 min-h-[300px] flex flex-col">
-                <h3 className="text-white font-semibold mb-4 text-lg">Units Sold by Region</h3>
+              <GlassCard className="md:col-span-2 lg:col-span-1 min-h-[320px] flex flex-col">
+                <h3 className="text-white font-semibold mb-6 text-lg tracking-tight">Units Sold by Region</h3>
                 <div className="flex-1 w-full min-h-0">
                   <RegionBarChart data={processedData} />
                 </div>
               </GlassCard>
 
               {/* Distribution - Bottom Right */}
-              <GlassCard className="md:col-span-2 min-h-[300px] flex flex-col">
-                <h3 className="text-white font-semibold mb-4 text-lg">Sales Distribution</h3>
+              <GlassCard className="md:col-span-2 min-h-[320px] flex flex-col">
+                <h3 className="text-white font-semibold mb-6 text-lg tracking-tight">Sales Distribution</h3>
                 <div className="flex-1 w-full min-h-0">
                   <SalesDistributionChart data={processedData} />
                 </div>
               </GlassCard>
             </div>
           ) : (
-            <GlassCard className="overflow-hidden h-full min-h-[600px] flex flex-col">
-              <h3 className="text-white font-semibold mb-4 text-lg">Raw Data Table</h3>
-              <div className="overflow-x-auto flex-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/20">
+            <GlassCard className="overflow-hidden h-[calc(100vh-250px)] min-h-[600px] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold text-lg">Raw Data Table</h3>
+                <span className="text-xs text-slate-500 bg-slate-900/50 px-2 py-1 rounded border border-slate-800">
+                  {processedData.length} records found
+                </span>
+              </div>
+              <div className="overflow-auto flex-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/20 border border-slate-700/50 rounded-lg">
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-slate-900/95 text-slate-400 text-xs uppercase tracking-wider">
+                  <thead className="sticky top-0 bg-slate-900 text-slate-400 text-xs uppercase tracking-wider z-10">
                     <tr>
                       {processedData.length > 0 && Object.keys(processedData[0]).map((key) => (
                         <th key={key} className="p-4 border-b border-slate-700 font-semibold">{key.replace('_', ' ')}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="text-slate-300 text-sm divide-y divide-slate-700/50">
+                  <tbody className="text-slate-300 text-sm divide-y divide-slate-800">
                     {processedData.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-700/30 transition-colors">
+                      <tr key={idx} className="hover:bg-slate-700/30 transition-colors odd:bg-slate-800/20">
                         {Object.values(row).map((val, i) => (
                           <td key={i} className="p-4 whitespace-nowrap">{val}</td>
                         ))}
@@ -286,7 +342,9 @@ const App: React.FC = () => {
                     ))}
                     {processedData.length === 0 && (
                       <tr>
-                        <td className="p-8 text-center text-slate-500" colSpan={5}>No data available. Import or generate data to view.</td>
+                        <td className="p-12 text-center text-slate-500 italic" colSpan={5}>
+                          No data available. <br/>Upload a file or use "Load Example" to get started.
+                        </td>
                       </tr>
                     )}
                   </tbody>

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { DataItem, ProcessingOptions } from "../types";
 
 // Helper to get the API key safely
@@ -11,6 +11,22 @@ const getApiKey = (): string => {
   return key;
 };
 
+// Define the schema for consistent AI output
+const dataItemSchema = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      date: { type: Type.STRING, description: "Date in YYYY-MM-DD format" },
+      sales: { type: Type.NUMBER, description: "Total sales amount" },
+      category: { type: Type.STRING, description: "Product category (e.g., Electronics, Apparel)" },
+      region: { type: Type.STRING, description: "Sales region (e.g., North, West)" },
+      units_sold: { type: Type.NUMBER, description: "Number of units sold" },
+    },
+    required: ["date", "sales", "category", "region", "units_sold"],
+  }
+};
+
 export const parseAndProcessData = async (
   rawInput: string,
   options: ProcessingOptions
@@ -20,40 +36,30 @@ export const parseAndProcessData = async (
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const prompt = `
-    You are a data processing engine. 
-    I will provide raw text or CSV-like data. 
-    You need to parse it into a clean JSON array of objects.
+  const systemInstruction = `
+    You are an advanced data processing engine. 
+    Your goal is to parse raw input text (CSV, JSON, or unstructured text) into a structured dataset.
     
-    Each object should ideally have the following fields (infer them if possible, or map close equivalents):
-    - date (YYYY-MM-DD format)
-    - sales (number)
-    - category (string)
-    - region (string)
-    - units_sold (number)
-
-    Processing Instructions:
-    ${options.cleanMissingValues ? "- Fill any missing numeric values with the average of that column. Fill missing strings with 'Unknown'." : "- Leave missing values as null or empty string."}
-    ${options.normalizeData ? "- Normalize the 'sales' figures to be between 0 and 1000 for visualization purposes if they are very large." : ""}
-    ${options.sortData ? "- Sort the data by Date ascending." : ""}
-    ${options.filterRows ? "- Remove any rows that look clearly like garbage data or headers." : ""}
-
-    Return ONLY the raw JSON array. Do not include markdown formatting like \`\`\`json.
-    
-    Raw Data:
-    ${rawInput}
+    Processing Rules applied by user:
+    ${options.cleanMissingValues ? "- Clean Missing Values: Infer missing numbers with averages, and strings with 'Unknown'." : "- Keep missing values as is (null/empty)."}
+    ${options.normalizeData ? "- Normalize Data: Ensure 'sales' values are scaled realistically (0-5000 range) if they seem outlier-ish." : ""}
+    ${options.sortData ? "- Sort Data: Sort the result chronologically by Date." : ""}
+    ${options.filterRows ? "- Filter Rows: Exclude header rows, footer rows, or garbage/corrupted data lines." : ""}
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt,
+      contents: `Parse this raw data:\n${rawInput}`,
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: dataItemSchema,
+      }
     });
 
     const text = response.text || "[]";
-    // Clean up if the model adds markdown despite instructions
-    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanedText);
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini processing error:", error);
     throw new Error("Failed to process data with AI.");
@@ -62,26 +68,23 @@ export const parseAndProcessData = async (
 
 export const generateExampleData = async (): Promise<DataItem[]> => {
   const apiKey = getApiKey();
-  if (!apiKey) return []; // Fallback or handle error
+  if (!apiKey) return [];
 
   const ai = new GoogleGenAI({ apiKey });
   
-  const prompt = `
-    Generate a realistic sample dataset for a sales dashboard.
-    Return a JSON array with 15 items.
-    Fields: date (last 12 months), sales (100-5000), category (Electronics, Apparel, Home Goods), region (North, South, East, West), units_sold (10-500).
-    Return ONLY JSON.
-  `;
-
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt,
+      contents: "Generate a realistic sales dataset with 15 records spanning the last 12 months.",
+      config: {
+        systemInstruction: "Generate realistic business data for visualization.",
+        responseMimeType: "application/json",
+        responseSchema: dataItemSchema,
+      }
     });
     
     const text = response.text || "[]";
-    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanedText);
+    return JSON.parse(text);
   } catch (e) {
     console.error(e);
     return [];
