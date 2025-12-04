@@ -1,6 +1,54 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DataItem, ProcessingOptions } from "../types";
 
+/**
+ * Diagnostic function to check what the environment actually looks like.
+ * This helps debug Vercel/Vite environment variable injection issues.
+ */
+export const getDiagnosticInfo = () => {
+  const diagnostics: string[] = [];
+  
+  // 1. Check import.meta.env (Standard Vite)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      diagnostics.push("Check 1: import.meta.env is available");
+      
+      // List keys starting with VITE_ or containing KEY to verify injection
+      // @ts-ignore
+      const allKeys = Object.keys(import.meta.env);
+      const visibleKeys = allKeys.filter(k => k.startsWith('VITE_') || k.includes('KEY'));
+      diagnostics.push(`Visible keys: [${visibleKeys.join(', ')}]`);
+      
+      // @ts-ignore
+      if (import.meta.env.VITE_API_KEY) diagnostics.push("✅ import.meta.env.VITE_API_KEY is SET");
+      else diagnostics.push("❌ import.meta.env.VITE_API_KEY is MISSING");
+      
+      // @ts-ignore
+      if (import.meta.env.API_KEY) diagnostics.push("⚠️ import.meta.env.API_KEY is SET (Non-standard)");
+    } else {
+      diagnostics.push("❌ import.meta.env is undefined");
+    }
+  } catch (e: any) {
+    diagnostics.push(`Error checking import.meta: ${e.message}`);
+  }
+
+  // 2. Check process.env (Fallback)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      diagnostics.push("Check 2: process.env is available");
+      if (process.env.VITE_API_KEY) diagnostics.push("✅ process.env.VITE_API_KEY is SET");
+      if (process.env.API_KEY) diagnostics.push("⚠️ process.env.API_KEY is SET");
+    } else {
+      diagnostics.push("ℹ️ process.env is undefined (Normal for Vite)");
+    }
+  } catch (e: any) {
+     diagnostics.push(`Error checking process.env: ${e.message}`);
+  }
+
+  return diagnostics;
+};
+
 // Helper to safely get the API Key in a browser/Vite environment
 export const getApiKey = (): string | undefined => {
   let key: string | undefined = undefined;
@@ -14,24 +62,17 @@ export const getApiKey = (): string | undefined => {
     else if (import.meta.env.API_KEY) key = import.meta.env.API_KEY;
   }
   
-  // 2. Try process.env (Fallback for some Vercel configurations or DefinePlugin)
+  // 2. Try process.env (Fallback for some Vercel configurations)
   if (!key) {
     try {
       if (typeof process !== 'undefined' && process.env) {
         if (process.env.VITE_API_KEY) key = process.env.VITE_API_KEY;
         else if (process.env.API_KEY) key = process.env.API_KEY;
-        else if (process.env.NEXT_PUBLIC_API_KEY) key = process.env.NEXT_PUBLIC_API_KEY; // Just in case
+        else if (process.env.NEXT_PUBLIC_API_KEY) key = process.env.NEXT_PUBLIC_API_KEY; 
       }
     } catch (e) {
       // Ignore ReferenceError
     }
-  }
-
-  // Debug log (Safe: only logs first 4 chars)
-  if (key) {
-    console.log(`[System] API Key detected: ${key.substring(0, 4)}...`);
-  } else {
-    console.warn("[System] No API Key detected in environment variables.");
   }
 
   return key;

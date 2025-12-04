@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Upload, FileText, Database, BarChart2, Table, Download, RefreshCw, Wand2, Loader2, Menu, Image as ImageIcon, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { DataItem, ProcessingOptions } from './types';
-import { parseAndProcessData, generateExampleData, getApiKey } from './services/geminiService';
+import { parseAndProcessData, generateExampleData, getApiKey, getDiagnosticInfo } from './services/geminiService';
 import { SalesTrendChart, CategoryPieChart, RegionBarChart, SalesDistributionChart } from './components/Charts';
 import { Toggle, GlassCard } from './components/Controls';
 
@@ -28,11 +28,14 @@ const App: React.FC = () => {
   // Diagnostic State
   const [keyStatus, setKeyStatus] = useState<'checking' | 'found' | 'missing'>('checking');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
   // Check key on mount
   useEffect(() => {
     const key = getApiKey();
     setKeyStatus(key ? 'found' : 'missing');
+    setDebugInfo(getDiagnosticInfo());
   }, []);
 
   // Load example data on mount
@@ -150,11 +153,31 @@ const App: React.FC = () => {
       
       {/* Diagnostic Banner */}
       {keyStatus === 'missing' && (
-        <div className="bg-red-500/10 border-b border-red-500/50 px-4 py-2 flex items-center justify-center gap-2 text-red-200 text-sm font-medium">
-          <XCircle className="w-4 h-4 text-red-400" />
-          <span>System Alert: VITE_API_KEY not detected in environment variables. Please check Vercel settings and redeploy.</span>
+        <div className="bg-red-500/10 border-b border-red-500/50">
+          <div className="px-4 py-3 flex items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-red-200 text-sm font-medium">
+              <XCircle className="w-5 h-5 text-red-400 shrink-0" />
+              <span>System Alert: VITE_API_KEY not detected. Please check Vercel settings.</span>
+            </div>
+            <button 
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-xs flex items-center gap-1 text-red-300 hover:text-white underline decoration-red-400/50"
+            >
+              {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
+              {showDebug ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
+            </button>
+          </div>
+          {showDebug && (
+            <div className="bg-black/30 px-4 py-3 text-xs font-mono text-slate-400 border-t border-red-500/20 max-h-40 overflow-auto">
+              {debugInfo.map((line, i) => (
+                <div key={i} className="mb-1">{line}</div>
+              ))}
+              <div className="mt-2 text-slate-500">Tip: Environment variables must start with VITE_ to be exposed to the browser.</div>
+            </div>
+          )}
         </div>
       )}
+      
       {keyStatus === 'found' && errorMsg && (
         <div className="bg-amber-500/10 border-b border-amber-500/50 px-4 py-2 flex items-center justify-center gap-2 text-amber-200 text-sm font-medium">
           <AlertTriangle className="w-4 h-4 text-amber-400" />
