@@ -38,7 +38,7 @@ const App: React.FC = () => {
     if (local) {
       setAuthMode('local');
     }
-    handleLoadExample();
+    // handleLoadExample(); // Removed to prevent auto-loading
   }, []);
 
   const detectColumns = (data: DataItem[]) => {
@@ -348,7 +348,7 @@ const App: React.FC = () => {
               <GlassCard className="md:col-span-2 min-h-[320px] flex flex-col">
                 <h3 className="text-white font-semibold mb-6 flex justify-between">
                    <span>Trend Analysis</span>
-                   <span className="text-xs font-normal text-slate-500">{colMapping.xKey} vs {colMapping.yKey}</span>
+                   <span className="text-xs font-normal text-slate-500">{colMapping.xKey ? `${colMapping.xKey} vs ${colMapping.yKey}` : 'No Data'}</span>
                 </h3>
                 <div className="flex-1 w-full"><SalesTrendChart data={processedData} xKey={colMapping.xKey} yKey={colMapping.yKey} categoryKey={colMapping.categoryKey}/></div>
               </GlassCard>
@@ -371,18 +371,24 @@ const App: React.FC = () => {
           ) : (
             <GlassCard className="overflow-hidden h-[600px] flex flex-col">
                <div className="overflow-auto flex-1">
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 bg-slate-900 text-slate-400 text-xs uppercase z-10">
-                    <tr>{processedData.length > 0 && Object.keys(processedData[0]).map(k => <th key={k} className="p-4 border-b border-slate-700">{k}</th>)}</tr>
-                  </thead>
-                  <tbody className="text-slate-300 text-sm divide-y divide-slate-800">
-                    {processedData.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-700/30">
-                        {Object.values(row).map((val, i) => <td key={i} className="p-4 whitespace-nowrap">{val}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {processedData.length > 0 ? (
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 bg-slate-900 text-slate-400 text-xs uppercase z-10">
+                      <tr>{Object.keys(processedData[0]).map(k => <th key={k} className="p-4 border-b border-slate-700">{k}</th>)}</tr>
+                    </thead>
+                    <tbody className="text-slate-300 text-sm divide-y divide-slate-800">
+                      {processedData.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-700/30">
+                          {Object.values(row).map((val, i) => <td key={i} className="p-4 whitespace-nowrap">{val}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-slate-500">
+                    No data to display. Paste data or upload a file to begin.
+                  </div>
+                )}
               </div>
             </GlassCard>
           )}
